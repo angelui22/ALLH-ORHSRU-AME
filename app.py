@@ -1,58 +1,69 @@
 import streamlit as st
-import google.generativeai as genai
-from google.generativeai import caching
-import os
+import requests
+import json
+from datetime import datetime
 
-# --- PROTOCOLO DE CONEXIÓN GLOBAL ---
-def inicializar_ia():
-    if "GOOGLE_API_KEY" in st.secrets:
-        # Forzamos la configuración para usar la versión estable y transporte REST
-        # Esto ayuda a saltar bloqueos regionales de v1beta
-        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"], transport='rest')
-        return genai.GenerativeModel('gemini-1.5-flash')
-    return None
+# --- CONFIGURACIÓN ---
+CLAVE_INSTITUCIONAL = "ORH2026"
+API_KEY = st.secrets.get("AIzaSyDMQjeCkC1VlLD60rD4e6mt1Y5hzjLdNto")
 
-# --- DOCTRINA INSTITUCIONAL ORH (MANTENIDA) ---
+# --- DOCTRINA ORH ---
 SYSTEM_PROMPT = """
-ACTÚA COMO: Asesor Táctico AME de la Organización Rescate Humboldt.
-PROTOCOLOS: PHTLS (X-ABCDE), TCCC (MARTE), START (Triage).
-CIERRE: "No solo es querer salvar, sino saber salvar" ALLH-ORH:2026.
+Actúa como Asesor Táctico AME de la Organización Rescate Humboldt.
+Protocolos: PHTLS (X-ABCDE), TCCC (MARTE), START (Triage).
+Cierre: "No solo es querer salvar, sino saber salvar" ALLH-ORH:2026.
 """
 
-st.set_page_config(page_title="AME-ORH Operaciones", layout="wide")
+st.set_page_config(page_title="AME-ORH Sistema", layout="wide")
 
-# --- LOGIN ---
 if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
-    st.title("SISTEMA AME-ORH")
-    if st.text_input("Clave Táctica", type="password") == "ORH2026":
-        if st.button("ACCEDER"): 
+    st.title("SISTEMA DE ASISTENCIA AME-ORH")
+    if st.text_input("Clave Táctica", type="password") == CLAVE_INSTITUCIONAL:
+        if st.button("DESBLOQUEAR"): 
             st.session_state.auth = True
             st.rerun()
     st.stop()
 
-# --- EJECUCIÓN ---
-model = inicializar_ia()
+# --- FUNCIÓN DE CONEXIÓN DIRECTA (PUENTE REST) ---
+def llamar_ia_directo(prompt_usuario):
+    # Usamos la URL de la versión estable v1, no la beta
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+    
+    headers = {'Content-Type': 'application/json'}
+    
+    payload = {
+        "contents": [{
+            "parts": [{"text": f"{SYSTEM_PROMPT}\n\nREPORTE: {prompt_usuario}"}]
+        }],
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 800
+        }
+    }
+    
+    response = requests.post(url, headers=headers, data=json.dumps(payload))
+    
+    if response.status_code == 200:
+        data = response.json()
+        return data['candidates'][0]['content']['parts'][0]['text']
+    else:
+        return f"Error de Enlace Crítico ({response.status_code}): {response.text}"
 
+# --- INTERFAZ ---
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Unidad SAR activa. Reporte SITREP."}]
+    st.session_state.messages = [{"role": "assistant", "content": "Unidad SAR-01 en línea. Transmita SITREP."}]
 
 for m in st.session_state.messages:
     with st.chat_message(m["role"]): st.markdown(m["content"])
 
-if prompt := st.chat_input("Transmita..."):
+if prompt := st.chat_input("Escriba su reporte..."):
     st.chat_message("user").markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    try:
-        # Usamos un bloque de control de errores más agresivo
-        response = model.generate_content(f"{SYSTEM_PROMPT}\n\nREPORTE: {prompt}")
+    with st.spinner("Procesando doctrina..."):
+        respuesta = llamar_ia_directo(prompt)
         
-        with st.chat_message("assistant"):
-            st.markdown(response.text)
-        st.session_state.messages.append({"role": "assistant", "content": response.text})
-    except Exception as e:
-        st.error(f"Bloqueo de Región/Enlace: {e}")
-        st.warning("⚠️ Su ubicación actual (VZLA) podría estar restringida. Intente usar un VPN en su navegador o cambie la región de su cuenta Google a una soportada globalmente.")
-
-st.caption("© 2026 ORH")
+    with st.chat_message("assistant"):
+        st.markdown(respuesta)
+    st.session_state.messages.append({"role": "assistant", "content": respuesta})

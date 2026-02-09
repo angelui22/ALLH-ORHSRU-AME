@@ -1,4 +1,5 @@
 streamlit
 google-generativeai
+httpx
 gspread
 google-auth

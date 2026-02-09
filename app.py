@@ -4,7 +4,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 
-# --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="SISTEMA AME-ORH 2026", layout="wide")
 
 CLAVE_INSTITUCIONAL = "ORH2026"
@@ -23,15 +22,12 @@ def registrar_en_excel(unidad, reporte, respuesta_ia):
         sheet.append_row([timestamp, unidad, reporte, respuesta_ia[:500]])
         return True
     except Exception as e:
-        if "403" in str(e):
-            st.sidebar.warning("⚠️ Google Drive API desactivada en Google Cloud.")
-        else:
-            st.sidebar.error(f"Error Registro: {str(e)}")
+        st.sidebar.error(f"Error de Registro: {str(e)}")
         return False
 
 def llamar_ia(texto_usuario):
-    # Obtener API Key y limpiar caracteres invisibles
-    api_key = st.secrets.get("GROQ_API_KEY", "").strip().replace('"', '').replace("'", "")
+    # Forzamos limpieza total de la llave
+    api_key = st.secrets["GROQ_API_KEY"].strip().replace('"', '').replace("'", "")
     
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
@@ -57,7 +53,7 @@ def llamar_ia(texto_usuario):
     except Exception as e:
         return f"Error de conexión: {str(e)}"
 
-# --- LÓGICA DE INTERFAZ ---
+# --- INTERFAZ ---
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
@@ -76,7 +72,7 @@ st.title("🚑 ASESORÍA TÁCTICA AME-ORH")
 
 with st.sidebar:
     st.header("CONFIGURACIÓN")
-    unidad_id = st.text_input("Identificación de Unidad:", value="SAR-01")
+    unidad_id = st.text_input("ID Unidad:", value="SAR-01")
     if st.button("Cerrar Sesión"):
         st.session_state.autenticado = False
         st.rerun()

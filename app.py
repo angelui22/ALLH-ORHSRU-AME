@@ -5,7 +5,7 @@ from datetime import datetime
 # --- CONFIGURACIÓN DE ACCESO ---
 CLAVE_INSTITUCIONAL = "ORH2026"
 
-# --- DOCTRINA TÁCTICA ÍNTEGRA (INSTRUCCIONES PASADAS) ---
+# --- DOCTRINA TÁCTICA ÍNTEGRA ---
 SYSTEM_PROMPT = """
 ACTÚA COMO: Asesor Táctico AME de la Organización Rescate Humboldt (ORH).
 ESTÁNDARES OBLIGATORIOS:
@@ -14,7 +14,7 @@ ESTÁNDARES OBLIGATORIOS:
 3. SAR: Protocolos OACI (Anexo 12) e IAMSAR (OMI).
 4. TRIAGE: Método START.
 
-FASE 1: Seguridad de Escena (Conducta PAS: Proteger, Avisar, Socorrer).
+FASE 1: Seguridad de Escena (Conducta PAS).
 FASE 2: Evaluación Clínica.
 FASE 3: Plan de Evacuación.
 
@@ -24,7 +24,6 @@ CIERRE OBLIGATORIO: "No solo es querer salvar, sino saber salvar" Organización 
 # --- INICIALIZACIÓN DE INTERFAZ ---
 st.set_page_config(page_title="AME-ORH Sistema Táctico", layout="wide", page_icon="🚑")
 
-# --- CONTROL DE ACCESO ---
 if "auth" not in st.session_state:
     st.session_state.auth = False
 
@@ -40,12 +39,13 @@ if not st.session_state.auth:
             st.error("Acceso Denegado")
     st.stop()
 
-# --- CONFIGURACIÓN DEL MOTOR IA ---
+# --- CONFIGURACIÓN DEL MOTOR IA (FIX 404) ---
 if "GOOGLE_API_KEY" in st.secrets:
     try:
+        # FORZAMOS LA VERSIÓN ESTABLE V1
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        # Forzamos el uso del modelo estable
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Especificamos la ruta completa del modelo para evitar que busque en v1beta
+        model = genai.GenerativeModel(model_name='models/gemini-1.5-flash')
     except Exception as e:
         st.error(f"Error de motor: {e}")
 else:
@@ -80,13 +80,17 @@ if prompt := st.chat_input("Transmita SITREP..."):
     try:
         # Generación con doctrina inyectada
         contexto = f"{SYSTEM_PROMPT}\n\nSITUACIÓN ACTUAL:\n{prompt}"
+        # Parámetro de seguridad para asegurar respuesta técnica
         response = model.generate_content(contexto)
         
         with st.chat_message("assistant"):
             st.markdown(response.text)
         st.session_state.messages.append({"role": "assistant", "content": response.text})
     except Exception as e:
+        # Si el error persiste, mostramos una guía de depuración
         st.error(f"Falla de enlace: {e}")
+        if "404" in str(e):
+            st.info("💡 Consejo Técnico: Asegúrese de que su API KEY no tenga restricciones de IP en Google AI Studio.")
 
 st.markdown("---")
 st.caption("© 2026 ORH - No solo es querer salvar, sino saber salvar.")

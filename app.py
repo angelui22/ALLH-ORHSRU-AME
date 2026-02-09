@@ -4,7 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 
-# --- CONFIGURACIÓN DE PÁGINA ---
+# --- CONFIGURACIÓN ---
 st.set_page_config(page_title="SISTEMA AME-ORH 2026", layout="wide")
 
 CLAVE_INSTITUCIONAL = "ORH2026"
@@ -23,12 +23,12 @@ def registrar_en_excel(unidad, reporte, respuesta_ia):
         sheet.append_row([timestamp, unidad, reporte, respuesta_ia[:500]])
         return True
     except Exception as e:
-        st.sidebar.error(f"Error de Registro: {str(e)}")
+        st.sidebar.error(f"Error Registro Excel: {str(e)}")
         return False
 
 def llamar_ia(texto_usuario):
     try:
-        # Limpieza extrema de la clave
+        # Limpieza profunda de la API KEY
         api_key = st.secrets["GROQ_API_KEY"].strip().replace('"', '').replace("'", "")
         
         url = "https://api.groq.com/openai/v1/chat/completions"
@@ -51,10 +51,10 @@ def llamar_ia(texto_usuario):
         if response.status_code == 200:
             return response.json()['choices'][0]['message']['content']
         else:
-            return f"Error IA ({response.status_code}): {response.text}"
+            return f"Error de IA ({response.status_code}): {response.text}"
             
     except Exception as e:
-        return f"Error de conexión: {str(e)}"
+        return f"Error crítico: {str(e)}"
 
 # --- INTERFAZ ---
 if "autenticado" not in st.session_state:
@@ -62,13 +62,13 @@ if "autenticado" not in st.session_state:
 
 if not st.session_state.autenticado:
     st.title("🛡️ ACCESO SISTEMA AME-ORH")
-    password = st.text_input("Ingrese Clave de Unidad:", type="password")
+    pwd = st.text_input("Clave de Unidad:", type="password")
     if st.button("DESBLOQUEAR"):
-        if password == CLAVE_INSTITUCIONAL:
+        if pwd == CLAVE_INSTITUCIONAL:
             st.session_state.autenticado = True
             st.rerun()
         else:
-            st.error("Acceso denegado.")
+            st.error("Acceso denegado")
     st.stop()
 
 st.title("🚑 ASESORÍA TÁCTICA AME-ORH")

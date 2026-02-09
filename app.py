@@ -5,44 +5,32 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="SISTEMA AME-ORH 2026", page_icon="🚑", layout="wide")
+st.set_page_config(page_title="SISTEMA AME-ORH 2026", layout="wide")
 
-# --- DOCTRINA TÁCTICA ---
 CLAVE_INSTITUCIONAL = "ORH2026"
 SYSTEM_PROMPT = """Actúa como Asesor Experto AME-ORH. 
 Tus respuestas deben ser técnicas, precisas y basadas en protocolos PAS y MARTE.
 Al final de cada respuesta, incluye siempre la frase: 'No solo es querer salvar, sino saber salvar. ALLH-ORH:2026.'"""
 
-# --- FUNCIÓN DE REGISTRO EN GOOGLE SHEETS ---
 def registrar_en_excel(unidad, reporte, respuesta_ia):
     try:
         scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
         creds_info = dict(st.secrets["gcp_service_account"])
         creds = Credentials.from_service_account_info(creds_info, scopes=scope)
         client = gspread.authorize(creds)
-        
-        # Debe coincidir exactamente con el nombre de tu archivo
         sheet = client.open("REGISTRO_AME_ORH").sheet1
-        
         timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        sheet.append_row([timestamp, unidad, reporte, respuesta_ia[:1000]]) # Aumentado a 1000 caracteres
+        sheet.append_row([timestamp, unidad, reporte, respuesta_ia[:500]])
         return True
     except Exception as e:
-        st.sidebar.error(f"Error de Registro: {e}")
+        st.sidebar.error(f"Error de Registro: {str(e)}")
         return False
 
-# --- FUNCIÓN DE INTELIGENCIA ARTIFICIAL (CON LIMPIEZA AGRESIVA) ---
 def llamar_ia(texto_usuario):
     try:
-        # 1. Extraer la llave de Secrets
-        raw_key = st.secrets.get("GROQ_API_KEY", "")
+        # Limpieza extrema de la clave
+        api_key = st.secrets["GROQ_API_KEY"].strip().replace('"', '').replace("'", "")
         
-        # 2. LIMPIEZA TÁCTICA: Elimina espacios, comillas de todo tipo y saltos de línea
-        api_key = raw_key.strip().replace('"', '').replace("'", "").replace("\n", "").replace("\r", "")
-        
-        if not api_key:
-            return "ERROR: No se encontró la GROQ_API_KEY en los Secrets de Streamlit."
-
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -55,3 +43,59 @@ def llamar_ia(texto_usuario):
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": texto_usuario}
             ],
+            "temperature": 0.5
+        }
+
+        response = requests.post(url, json=payload, timeout=20)
+        
+        if response.status_code == 200:
+            return response.json()['choices'][0]['message']['content']
+        else:
+            return f"Error IA ({response.status_code}): {response.text}"
+            
+    except Exception as e:
+        return f"Error de conexión: {str(e)}"
+
+# --- INTERFAZ ---
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
+
+if not st.session_state.autenticado:
+    st.title("🛡️ ACCESO SISTEMA AME-ORH")
+    password = st.text_input("Ingrese Clave de Unidad:", type="password")
+    if st.button("DESBLOQUEAR"):
+        if password == CLAVE_INSTITUCIONAL:
+            st.session_state.autenticado = True
+            st.rerun()
+        else:
+            st.error("Acceso denegado.")
+    st.stop()
+
+st.title("🚑 ASESORÍA TÁCTICA AME-ORH")
+
+with st.sidebar:
+    st.header("CONFIGURACIÓN")
+    unidad_id = st.text_input("ID Unidad:", value="SAR-01")
+    if st.button("Cerrar Sesión"):
+        st.session_state.autenticado = False
+        st.rerun()
+
+if "mensajes" not in st.session_state:
+    st.session_state.mensajes = []
+
+for m in st.session_state.mensajes:
+    with st.chat_message(m["role"]):
+        st.markdown(m["content"])
+
+if prompt := st.chat_input("Escriba su SITREP aquí..."):
+    st.session_state.mensajes.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.spinner("Procesando..."):
+        respuesta = llamar_ia(prompt)
+        registrar_en_excel(unidad_id, prompt, respuesta)
+
+    st.session_state.mensajes.append({"role": "assistant", "content": respuesta})
+    with st.chat_message("assistant"):
+        st.markdown(respuesta)

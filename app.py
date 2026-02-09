@@ -5,7 +5,7 @@ from datetime import datetime
 
 # --- CONFIGURACIÓN ---
 CLAVE_INSTITUCIONAL = "ORH2026"
-API_KEY = st.secrets.get("AIzaSyDMQjeCkC1VlLD60rD4e6mt1Y5hzjLdNto")
+API_KEY = st.secrets.get("AIzaSyAB4iZKQRBpTS5Q8ym9TlELSBdneQn8-oE")
 
 # --- DOCTRINA ORH ---
 SYSTEM_PROMPT = """
@@ -67,3 +67,4 @@ if prompt := st.chat_input("Escriba su reporte..."):
     with st.chat_message("assistant"):
         st.markdown(respuesta)
     st.session_state.messages.append({"role": "assistant", "content": respuesta})
+

@@ -5,6 +5,7 @@ from datetime import datetime
 
 # --- CONFIGURACIÓN DE SEGURIDAD ---
 CLAVE_INSTITUCIONAL = "ORH2026"
+API_KEY = st.secrets.get("GOOGLE_API_KEY", "").strip()
 
 # --- DOCTRINA INSTITUCIONAL ÍNTEGRA ---
 SYSTEM_PROMPT = """
@@ -40,31 +41,26 @@ if not st.session_state.auth:
             st.error("Acceso Denegado")
     st.stop()
 
-# --- MOTOR DE COMUNICACIÓN DIRECTA (REST v1) ---
+# --- MOTOR DE COMUNICACIÓN DIRECTA (REST v1 - COMPATIBILIDAD TOTAL) ---
 def llamar_ia_directo(prompt_usuario):
-    # Verificación de existencia de llave
-    if "GOOGLE_API_KEY" not in st.secrets:
-        return "Error: GOOGLE_API_KEY no configurada en Secrets."
-    
-    # Limpieza de la llave (Elimina espacios accidentales)
-    api_key_limpia = st.secrets["GOOGLE_API_KEY"].strip()
-    
-    # URL Forzada a v1 Estable
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key_limpia}"
+    # Probamos con la ruta de modelo más genérica disponible
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
     
     headers = {'Content-Type': 'application/json'}
     payload = {
         "contents": [{
             "parts": [{"text": f"{SYSTEM_PROMPT}\n\nREPORTE DE CAMPO: {prompt_usuario}"}]
-        }],
-        "generationConfig": {
-            "temperature": 0.7,
-            "maxOutputTokens": 1000
-        }
+        }]
     }
     
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+        # Si v1beta falla (404), intentamos v1 automáticamente
+        if response.status_code == 404:
+            url_v1 = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+            response = requests.post(url_v1, headers=headers, json=payload, timeout=30)
+
         if response.status_code == 200:
             data = response.json()
             return data['candidates'][0]['content']['parts'][0]['text']
@@ -73,33 +69,13 @@ def llamar_ia_directo(prompt_usuario):
     except Exception as e:
         return f"Falla en la transmisión: {str(e)}"
 
-# --- PANEL LATERAL ---
+# --- INTERFAZ DE USUARIO ---
 with st.sidebar:
     st.title("CONTROL SAR-AME")
     id_u = st.text_input("ID Unidad", "SAR-01")
-    st.divider()
     if st.button("Cerrar Misión"):
         st.session_state.auth = False
         st.rerun()
 
-# --- CHAT OPERATIVO ---
 if "messages" not in st.session_state:
-    bienvenida = f"### 🚑 UNIDAD {id_u} EN LÍNEA\nEspecialista, sistema bajo doctrina **ALLH-ORH:2026** activo.\n\nIndique estado de la escena (PAS) para iniciar."
-    st.session_state.messages = [{"role": "assistant", "content": bienvenida}]
-
-for m in st.session_state.messages:
-    with st.chat_message(m["role"]): st.markdown(m["content"])
-
-if prompt := st.chat_input("Transmita SITREP..."):
-    st.chat_message("user").markdown(prompt)
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    
-    with st.spinner("Sincronizando con base de datos táctica..."):
-        respuesta = llamar_ia_directo(prompt)
-        
-    with st.chat_message("assistant"):
-        st.markdown(respuesta)
-    st.session_state.messages.append({"role": "assistant", "content": respuesta})
-
-st.markdown("---")
-st.caption("© 2026 ORH - División AME - No solo es querer salvar, sino saber salvar.")
+    bienvenida = f"### 🚑 UNIDAD {id_u} EN LÍNEA\nEspecialista, sistema activo. Indique situación (PAS/MARTE)."
